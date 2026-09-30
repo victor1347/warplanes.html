@@ -1,0 +1,103 @@
+<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>صقور السماء</title><style>
+:root{--bg:#0b1220;--fg:#e8eef8;--ac:#4cc3ff;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0b1220;--fg:#e8eef8}}
+:root[data-theme="dark"]{--bg:#0b1220;--fg:#e8eef8}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--fg);font-family:system-ui,-apple-system,"Segoe UI",Tahoma,sans-serif;overflow:hidden;touch-action:manipulation;-webkit-user-select:none;user-select:none}
+canvas{position:fixed;left:0;top:0;width:100%;height:100%;touch-action:none}
+#hud{position:fixed;top:0;left:0;right:0;padding:calc(6px + env(safe-area-inset-top,0px)) 10px 0;display:none;justify-content:space-between;gap:8px;font-size:13px;pointer-events:none;direction:ltr}
+#hp{height:8px;background:#0006;border-radius:4px;overflow:hidden;width:120px;margin-top:4px}#hb{height:100%;background:#5f5;width:100%}
+#ctl{position:fixed;right:10px;bottom:0;padding-bottom:calc(10px + env(safe-area-inset-bottom,0px));display:none;grid-template-columns:repeat(2,72px);gap:8px;direction:ltr}
+#ctl button{height:62px;border-radius:14px;border:2px solid #fff6;background:#1a2a44cc;color:var(--fg);font-size:12px;touch-action:none}
+#ctl button.on{background:var(--ac);color:#000}
+#ctl #bg{grid-column:span 2;height:78px;background:#7a1f1fcc;font-size:17px}
+#menu{position:fixed;left:0;top:0;right:0;bottom:0;overflow-y:auto;touch-action:pan-y;background:#0b1220ee;padding:calc(12px + env(safe-area-inset-top,0px)) 12px calc(12px + env(safe-area-inset-bottom,0px))}
+.c{display:block;width:100%;text-align:start;margin:8px 0;padding:10px 12px;border-radius:12px;border:1px solid #fff3;background:#16233b;color:var(--fg);font:inherit}
+.c small{opacity:.75}
+</style></head><body>
+<canvas id="cv"></canvas>
+<div id="hud"><div><span id="sc"></span><div id="hp"><div id="hb"></div></div></div><span id="mc"></span></div>
+<div id="ctl"><button id="bg">🔫 مدفع</button><button id="b1">AIM-9X<br><span id="n1"></span></button><button id="b2">AIM-120<br><span id="n2"></span></button><button id="b3">صواريخ 70mm<br><span id="n3"></span></button><button id="b4">شعلات<br><span id="n4"></span></button></div>
+<div id="menu"><h2 style="margin:4px 0">✈️ صقور السماء</h2><p id="msg" style="margin:0 0 6px;opacity:.85"></p><div id="list"></div><p style="font-size:12px;opacity:.7">التحكم: اسحب بإصبعك على الجهة اليسرى للحركة، وأزرار اليمين للأسلحة. (كيبورد: الأسهم + مسطرة / Z X C F)</p></div>
+<script>
+const $=i=>document.getElementById(i),cv=$('cv'),c=cv.getContext('2d'),R=(a,b)=>a+Math.random()*(b-a),Q=(a,b)=>(a.x-b.x)**2+(a.y-b.y)**2;
+let W,H,S,vw,vh,dpr,g=null,last=0,hi=0,keys={},st={id:-1,ox:0,oy:0,x:0,y:0},hold=0;
+try{hi=+localStorage.getItem('sk_hi')||0}catch(e){}
+function rs(){dpr=Math.min(devicePixelRatio||1,2);W=innerWidth;H=innerHeight;cv.width=W*dpr;cv.height=H*dpr;S=Math.min(W,H)/420;vw=W/S;vh=H/S}
+addEventListener('resize',rs);rs();
+const CL=Array.from({length:14},()=>({x:R(0,vw),y:R(0,vh),r:R(18,55),s:R(25,80)}));
+// الاسم، الدولة، أقصى سرعة (ماخ - تقريبي)، الدرع، المناورة، اللون
+const J=[["F-22 Raptor","🇺🇸 أمريكا",2.25,8,9,"#8d9bb0"],["F-35A Lightning II","🇺🇸 أمريكا",1.6,9,7,"#7c8797"],["F-15EX Eagle II","🇺🇸 أمريكا",2.5,9,7,"#6f8aa8"],["Su-57 Felon","🇷🇺 روسيا",2.0,8,9,"#8a9a86"],["Su-35S Flanker-E","🇷🇺 روسيا",2.25,8,10,"#7f93a8"],["J-20 Mighty Dragon","🇨🇳 الصين",2.0,8,8,"#93a08a"],["J-10C Vigorous Dragon","🇨🇳 الصين",1.8,6,8,"#a5a58c"],["Rafale F4","🇫🇷 فرنسا",1.8,7,9,"#9ba7b8"],["Eurofighter Typhoon","🇬🇧 بريطانيا / أوروبا",2.0,7,9,"#8e9aa8"],["Gripen E","🇸🇪 السويد",2.0,6,8,"#a0a8b0"],["KF-21 Boramae","🇰🇷 كوريا الجنوبية",1.8,7,8,"#8f9db0"],["HAL Tejas Mk1A","🇮🇳 الهند",1.6,5,8,"#a3ab95"]];
+const MX=[0,6,4,3,4],RT=[0,7,14,10,12],CD=[0,.4,.7,1.4,1.5];
+$('list').innerHTML=J.map((j,i)=>`<button class="c" data-i="${i}"><b>${j[0]}</b> — ${j[1]}<br><small>السرعة القصوى ماخ ${j[2]} · الدرع ${j[3]}/10 · المناورة ${j[4]}/10</small></button>`).join('');
+$('list').onclick=e=>{const b=e.target.closest('.c');if(b)start(+b.dataset.i)};
+function menu(m){$('menu').style.display='block';$('ctl').style.display='none';$('hud').style.display='none';$('msg').textContent=m||'اختر طائرتك'}
+function start(i){const j=J[i],h=60+j[3]*10;g={j,x:vw/2,y:vh*.78,vx:0,vy:0,hp:h,mh:h,sp:150+j[2]*80,ag:2+j[4]*.8,a:[0,6,4,3,4],cd:[0,0,0,0,0],rg:[0,0,0,0,0],fl:0,score:0,kills:0,wave:1,t:0,sn:1,side:1,sh:0,B:[],EB:[],M:[],E:[],FX:[]};
+$('menu').style.display='none';$('ctl').style.display='grid';$('hud').style.display='flex'}
+const P=(x,y,vx,vy,l,col,r)=>g.FX.push({x,y,vx,vy,l,m:l,c:col,r});
+function boom(x,y,r){for(let i=0;i<r/2+8;i++){const a=R(0,6.3),s=R(20,r*5);P(x,y,Math.cos(a)*s,Math.sin(a)*s,R(.3,.8),i%2?'#ffb347':'#ff5a36',R(2,5))}}
+function hurt(d){if(g.dead)return;g.hp-=d;g.sh=8;if(g.hp<=0){g.dead=1;boom(g.x,g.y,60);hi=Math.max(hi,g.score);try{localStorage.setItem('sk_hi',hi)}catch(e){}setTimeout(()=>menu('انتهت اللعبة! النقاط: '+g.score+' · أعلى نتيجة: '+hi),1300)}}
+function dmg(e,d){e.hp-=d;if(e.hp<=0&&!e.dead){e.dead=1;boom(e.x,e.y,e.r*1.6);g.score+=e.pts;g.kills++;g.wave=1+(g.kills/12|0)}}
+function pick(k){let b=null,s=-1e9;for(const e of g.E){if(e.dead||e.y<-10||e.y>g.y)continue;const v=k==1?-Q(e,g):e.pts*1e4-Math.abs(e.x-g.x);if(v>s){s=v;b=e}}return b}
+function fire(k){if(!g||g.dead||g.a[k]<1||g.cd[k]>0)return;g.a[k]--;g.cd[k]=CD[k];
+if(k<3){const s=g.side=-g.side;g.M.push({x:g.x+s*14,y:g.y-6,a:0,v:200,mv:k==1?500:700,tr:k==1?4.6:2.6,d:k==1?50:95,ex:k==1?38:62,t:pick(k),c:k==1?'#ffd27a':'#a5f3ff',l:5})}
+else if(k==3){for(let i=0;i<6;i++)g.B.push({x:g.x+R(-18,18),y:g.y-10-i*4,vx:R(-25,25),vy:-820,d:16,c:'#ffb347',r:3})}
+else{g.fl=2.5;for(const m of g.M)if(m.e)m.lost=1;for(let i=0;i<10;i++)P(g.x+R(-8,8),g.y+18,R(-90,90),R(30,120),1.6,'#ffe9a0',3)}}
+function spawn(){const r=Math.random();let t=r<.62?0:r<.88?1:2;if(g.wave<2&&t==2)t=0;
+g.E.push(Object.assign(t==0?{hp:24,r:16,sp:R(80,120),pts:100}:t==1?{hp:38,r:18,sp:R(65,95),pts:200}:{hp:140,r:34,sp:42,pts:500},{t,x:R(40,vw-40),y:-40,ph:R(0,6),cd:R(1,2.5)}))}
+function ef(e){if(e.t==1){g.M.push({x:e.x,y:e.y+14,a:Math.PI,v:150,mv:230,tr:1.7,d:30,ex:30,e:1,c:'#ff6b6b',l:6});return}
+const a=Math.atan2(g.x-e.x,g.y-e.y),n=e.t==2?3:1;for(let i=0;i<n;i++){const b=a+(i-(n-1)/2)*.3;g.EB.push({x:e.x,y:e.y+16,vx:Math.sin(b)*260,vy:Math.cos(b)*260,d:10})}}
+function upd(dt){
+for(const k of CL){k.y+=k.s*dt;if(k.y>vh+80){k.y=-80;k.x=R(0,vw)}}
+if(!g)return;
+for(const f of g.FX){f.x+=f.vx*dt;f.y+=f.vy*dt;f.l-=dt}g.FX=g.FX.filter(f=>f.l>0);g.sh=Math.max(0,g.sh-dt*30);
+if(g.dead)return;
+g.t+=dt;g.sn-=dt;g.fl-=dt;
+for(let i=0;i<5;i++){g.cd[i]-=dt;if(i&&g.a[i]<MX[i]){g.rg[i]+=dt;if(g.rg[i]>RT[i]){g.rg[i]=0;g.a[i]++}}}
+let ix,iy;if(st.id>=0){ix=st.x;iy=st.y}else{ix=(keys.ArrowRight||keys.d?1:0)-(keys.ArrowLeft||keys.a?1:0);iy=(keys.ArrowDown||keys.s?1:0)-(keys.ArrowUp||keys.w?1:0)}
+const k=Math.min(1,dt*g.ag);g.vx+=(ix*g.sp-g.vx)*k;g.vy+=(iy*g.sp*.8-g.vy)*k;
+g.x=Math.max(20,Math.min(vw-20,g.x+g.vx*dt));g.y=Math.max(70,Math.min(vh-90,g.y+g.vy*dt));
+if((hold||keys[' '])&&g.cd[0]<=0){g.cd[0]=.075;g.B.push({x:g.x-9,y:g.y-20,vx:0,vy:-950,d:5,c:'#fff59d',r:2},{x:g.x+9,y:g.y-20,vx:0,vy:-950,d:5,c:'#fff59d',r:2})}
+if(g.sn<=0){g.sn=Math.max(.45,1.7-g.wave*.12);spawn()}
+for(const e of g.E){e.y+=e.sp*dt*(e.y<0?1.5:1);e.x+=Math.sin(g.t*1.2+e.ph)*(e.t==2?15:50)*dt;e.cd-=dt;
+if(e.cd<=0&&e.y>0&&e.y<vh*.7){e.cd=e.t==0?R(1.2,2.2):e.t==1?R(3.5,5):R(1.6,2.4);ef(e)}
+if(e.y>vh+60)e.dead=1;else if(!e.dead&&Q(e,g)<(e.r+14)**2){hurt(35);dmg(e,999)}}
+for(const b of g.B){b.x+=b.vx*dt;b.y+=b.vy*dt;if(b.y<-20)b.dead=1;else for(const e of g.E)if(!e.dead&&Q(b,e)<(e.r+b.r)**2){b.dead=1;dmg(e,b.d);P(b.x,b.y,R(-40,40),R(-40,40),.25,'#fff',2);break}}
+for(const b of g.EB){b.x+=b.vx*dt;b.y+=b.vy*dt;if(b.y>vh+20||b.x<-20||b.x>vw+20)b.dead=1;else if(Q(b,g)<196){b.dead=1;hurt(b.d)}}
+for(const m of g.M){m.l-=dt;m.v+=(m.mv-m.v)*dt*2.5;
+let t=m.e?(m.lost?null:g):(m.t&&!m.t.dead?m.t:null);
+if(!m.e&&!t&&!m.re){m.re=1;m.t=pick(1);t=m.t}
+if(t){let d=Math.atan2(t.x-m.x,-(t.y-m.y))-m.a;d=Math.atan2(Math.sin(d),Math.cos(d));const q=m.tr*dt;m.a+=Math.max(-q,Math.min(q,d))}
+m.x+=Math.sin(m.a)*m.v*dt;m.y-=Math.cos(m.a)*m.v*dt;
+P(m.x-Math.sin(m.a)*10,m.y+Math.cos(m.a)*10,0,0,.5,'rgba(230,230,230,.6)',2.5);
+let hit=m.l<=0||m.x<-40||m.x>vw+40||m.y<-40||m.y>vh+40;
+if(!hit){if(m.e){if(Q(m,g)<256){hit=1;hurt(m.d)}}else for(const e of g.E)if(!e.dead&&Q(m,e)<(e.r+6)**2){hit=1;break}}
+if(hit){m.dead=1;boom(m.x,m.y,m.ex);if(!m.e)for(const e of g.E)if(!e.dead&&Q(m,e)<(m.ex+e.r)**2)dmg(e,m.d)}}
+g.B=g.B.filter(o=>!o.dead);g.EB=g.EB.filter(o=>!o.dead);g.M=g.M.filter(o=>!o.dead);g.E=g.E.filter(o=>!o.dead)}
+function jet(col,w){c.fillStyle=col;c.beginPath();c.moveTo(0,-30);c.lineTo(5,-8);c.lineTo(w*28,14);c.lineTo(w*26,21);c.lineTo(6,15);c.lineTo(9,28);c.lineTo(0,24);c.lineTo(-9,28);c.lineTo(-6,15);c.lineTo(-w*26,21);c.lineTo(-w*28,14);c.lineTo(-5,-8);c.closePath();c.fill();c.fillStyle='#0008';c.beginPath();c.ellipse(0,-12,3,8,0,0,7);c.fill()}
+function draw(){c.setTransform(dpr*S,0,0,dpr*S,0,0);
+const gr=c.createLinearGradient(0,0,0,vh);gr.addColorStop(0,'#0b3a5e');gr.addColorStop(1,'#1d7096');c.fillStyle=gr;c.fillRect(0,0,vw,vh);
+c.fillStyle='rgba(255,255,255,.13)';for(const k of CL){c.beginPath();c.arc(k.x,k.y,k.r,0,7);c.arc(k.x+k.r*.9,k.y+k.r*.25,k.r*.7,0,7);c.fill()}
+if(!g)return;
+c.save();if(g.sh)c.translate(R(-g.sh,g.sh),R(-g.sh,g.sh));
+for(const f of g.FX){c.globalAlpha=Math.max(0,f.l/f.m);c.fillStyle=f.c;c.beginPath();c.arc(f.x,f.y,f.r,0,7);c.fill()}c.globalAlpha=1;
+for(const b of g.B){c.fillStyle=b.c;c.fillRect(b.x-b.r/2,b.y-8,b.r,10)}
+c.fillStyle='#ff5a5a';for(const b of g.EB){c.beginPath();c.arc(b.x,b.y,3.5,0,7);c.fill()}
+for(const m of g.M){c.save();c.translate(m.x,m.y);c.rotate(m.a);c.fillStyle=m.c;c.fillRect(-2,-9,4,16);c.fillStyle='#fff';c.fillRect(-4,4,8,3);c.restore()}
+for(const e of g.E){c.save();c.translate(e.x,e.y);c.rotate(Math.PI);const s=e.t==2?1.9:1;c.scale(s,s);jet(['#b04a4a','#c9822e','#6d5555'][e.t],.9+e.t*.15);c.restore()}
+if(!g.dead){c.save();c.translate(g.x,g.y);c.rotate(g.vx/g.sp*.4);const fl=10+R(0,10)+Math.max(0,-g.vy/g.sp)*12;c.fillStyle='#ffb347';c.beginPath();c.moveTo(-4,26);c.lineTo(0,26+fl);c.lineTo(4,26);c.fill();jet(g.j[5],.85+g.j[4]*.04);c.restore()}
+if(g.fl>0){c.strokeStyle='#ffe9a0';c.globalAlpha=.4;c.beginPath();c.arc(g.x,g.y,30,0,7);c.stroke();c.globalAlpha=1}
+c.restore();
+if(st.id>=0){c.strokeStyle='#fff5';c.lineWidth=2;c.beginPath();c.arc(st.ox/S,st.oy/S,50/S,0,7);c.stroke();c.fillStyle='#fff4';c.beginPath();c.arc((st.ox+st.x*50)/S,(st.oy+st.y*50)/S,18/S,0,7);c.fill()}}
+function hud(){if(!g)return;$('sc').textContent='النقاط '+g.score+' | موجة '+g.wave;$('hb').style.width=Math.max(0,g.hp/g.mh*100)+'%';$('mc').textContent=g.j[0]+' · ماخ '+(g.j[2]*(.45+.55*Math.hypot(g.vx,g.vy)/g.sp)).toFixed(2);for(let k=1;k<5;k++){$('n'+k).textContent='×'+g.a[k];$('b'+k).style.opacity=g.a[k]&&g.cd[k]<=0?1:.45}}
+function loop(t){const dt=Math.min(.05,(t-last)/1000||0);last=t;upd(dt);draw();hud();requestAnimationFrame(loop)}
+const bd=(id,f)=>{const b=$(id);b.onpointerdown=e=>{e.preventDefault();b.classList.add('on');f(1)};b.onpointerup=b.onpointercancel=()=>{b.classList.remove('on');f(0)}};
+bd('bg',v=>hold=v);for(let k=1;k<5;k++)bd('b'+k,v=>v&&fire(k));
+cv.onpointerdown=e=>{if(st.id<0&&e.clientX<W*.62){st={id:e.pointerId,ox:e.clientX,oy:e.clientY,x:0,y:0};cv.setPointerCapture(e.pointerId)}};
+cv.onpointermove=e=>{if(e.pointerId!=st.id)return;let x=(e.clientX-st.ox)/50,y=(e.clientY-st.oy)/50,l=Math.hypot(x,y);if(l>1){x/=l;y/=l}st.x=x;st.y=y};
+cv.onpointerup=cv.onpointercancel=e=>{if(e.pointerId==st.id)st={id:-1,ox:0,oy:0,x:0,y:0}};
+const kk=e=>e.key.length>1?e.key:e.key.toLowerCase();
+onkeydown=e=>{const k=kk(e);keys[k]=1;if(!e.repeat){if(k=='z')fire(1);if(k=='x')fire(2);if(k=='c')fire(3);if(k=='f')fire(4)}};onkeyup=e=>{keys[kk(e)]=0};
+menu();requestAnimationFrame(loop);
+</script></body></html>
